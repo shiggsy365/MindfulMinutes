@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -40,7 +41,9 @@ fun ExerciseTimer(
     onFav: (() -> Unit)? = null,
     isFav: Boolean = false,
     onComplete: () -> Unit = {},
-    onJournal: (() -> Unit)? = null
+    onJournal: (() -> Unit)? = null,
+    isMuted: Boolean = false,
+    onToggleMute: () -> Unit = {}
 ) {
     val isBreathing = exercise.cat == "breathing"
     val pattern = if (isBreathing) getBreathingPattern(exercise) else null
@@ -49,8 +52,12 @@ fun ExerciseTimer(
     var customMins by remember { mutableIntStateOf(exercise.mins) }
     var phase by remember { mutableStateOf("preview") }
     var timeLeft by remember { mutableIntStateOf(customMins * 60) }
+    var cyclesLeft by remember { mutableIntStateOf(exercise.cycles ?: 0) }
     var step by remember { mutableIntStateOf(0) }
     var elapsed by remember { mutableIntStateOf(0) }
+
+    val speechManager = com.mindfulminutes.LocalSpeechManager.current
+    var lastSpokenInstruction by remember { mutableStateOf("") }
 
     // Reset time when customMins changes in preview
     LaunchedEffect(customMins, phase) {
@@ -63,11 +70,19 @@ fun ExerciseTimer(
     LaunchedEffect(phase) {
         if (phase == "active") {
             elapsed = 0
-            while (timeLeft > 0) {
+            while ((exercise.cycles == null && timeLeft > 0) || (exercise.cycles != null && cyclesLeft > 0)) {
                 delay(1000)
                 elapsed++
-                timeLeft--
-                if (timeLeft <= 0) {
+                if (exercise.cycles == null) {
+                    timeLeft--
+                } else if (pattern != null) {
+                    val cycleDuration = pattern.inhale + pattern.hold1 + pattern.exhale + pattern.hold2
+                    if (elapsed % cycleDuration == 0) {
+                        cyclesLeft--
+                    }
+                }
+                
+                if ((exercise.cycles == null && timeLeft <= 0) || (exercise.cycles != null && cyclesLeft <= 0)) {
                     phase = "complete"
                     onComplete()
                 }
@@ -102,10 +117,25 @@ fun ExerciseTimer(
         exercise.steps.getOrElse(step) { "" }
     }
 
+    // TTS Logic
+    LaunchedEffect(currentInstruction, phase) {
+        if (phase == "active" && currentInstruction.isNotEmpty() && currentInstruction != lastSpokenInstruction) {
+            speechManager?.speak(currentInstruction)
+            lastSpokenInstruction = currentInstruction
+        } else if (phase == "complete" && lastSpokenInstruction != "COMPLETE_DONE") {
+            speechManager?.speak("Activity complete. well done.")
+            lastSpokenInstruction = "COMPLETE_DONE"
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xF7080C0A))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Surface, Background, SurfaceLight)
+                )
+            )
     ) {
         when (phase) {
             "preview" -> PreviewPhase(
@@ -113,21 +143,24 @@ fun ExerciseTimer(
                 cat = cat,
                 isBreathing = isBreathing,
                 pattern = pattern,
-                customMins = customMins,
-                onMinsChange = { customMins = it },
-                onClose = onClose,
                 onFav = onFav,
                 isFav = isFav,
-                onReady = { phase = "ready" }
+                isMuted = isMuted,
+                onToggleMute = onToggleMute,
+                onReady = { phase = "ready" },
+                onClose = {
+                    speechManager?.stop()
+                    onClose()
+                }
             )
             "ready" -> ReadyPhase(
                 exercise = exercise,
                 cat = cat,
-                customMins = customMins,
                 onClose = onClose,
                 onReview = { phase = "preview" },
                 onBegin = {
-                    timeLeft = customMins * 60
+                    timeLeft = (exercise.mins).coerceAtLeast(1) * 60
+                    cyclesLeft = exercise.cycles ?: 0
                     elapsed = 0
                     step = 0
                     phase = "active"
@@ -145,12 +178,21 @@ fun ExerciseTimer(
                 seconds = seconds,
                 currentInstruction = currentInstruction,
                 step = step,
-                onClose = onClose,
+                cyclesLeft = cyclesLeft,
+                isMuted = isMuted,
+                onToggleMute = onToggleMute,
+                onClose = {
+                    speechManager?.stop()
+                    onClose()
+                },
                 onReset = {
-                    timeLeft = customMins * 60
+                    speechManager?.stop()
+                    timeLeft = (exercise.mins).coerceAtLeast(1) * 60
+                    cyclesLeft = exercise.cycles ?: 0
                     step = 0
                     elapsed = 0
                     phase = "ready"
+                    lastSpokenInstruction = ""
                 },
                 onJournal = onJournal
             )
@@ -164,11 +206,11 @@ private fun PreviewPhase(
     cat: Category,
     isBreathing: Boolean,
     pattern: BreathingPattern?,
-    customMins: Int,
-    onMinsChange: (Int) -> Unit,
     onClose: () -> Unit,
     onFav: (() -> Unit)?,
     isFav: Boolean,
+    isMuted: Boolean,
+    onToggleMute: () -> Unit,
     onReady: () -> Unit
 ) {
     Column(
@@ -184,17 +226,23 @@ private fun PreviewPhase(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             if (onFav != null) {
-                Text(
-                    text = if (isFav) "♥" else "♡",
-                    color = if (isFav) FavColor else TextMuted,
-                    fontSize = 22.sp,
-                    modifier = Modifier.clickable { onFav() }
-                )
-            } else Spacer(Modifier.width(24.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (isFav) "♥" else "♡",
+                        color = if (isFav) FavColor else TextMuted,
+                        fontSize = 22.sp,
+                        modifier = Modifier.clickable { onFav() }
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    MuteToggle(isMuted = isMuted, onToggle = onToggleMute)
+                }
+            } else {
+                MuteToggle(isMuted = isMuted, onToggle = onToggleMute)
+            }
             Text(
                 text = "✕",
-                color = TextMuted,
-                fontSize = 22.sp,
+                color = TextTertiary,
+                fontSize = 26.sp,
                 modifier = Modifier.clickable { onClose() }
             )
         }
@@ -224,86 +272,20 @@ private fun PreviewPhase(
 
         Spacer(Modifier.height(24.dp))
 
+        // Fixed duration display
+        Text(
+            text = "${exercise.mins} MINUTE ACTIVITY",
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 11.sp,
+            color = Accent,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(Modifier.height(24.dp))
+
         if (isBreathing && pattern != null) {
-            // Duration selector
-            Text(
-                text = "DURATION",
-                fontFamily = FontFamily.SansSerif,
-                fontSize = 10.sp,
-                color = TextMuted,
-                letterSpacing = 1.5.sp
-            )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(1, 2, 3, 5).forEach { d ->
-                    val selected = customMins == d
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                if (selected) cat.bg else CardBg,
-                                CircleShape
-                            )
-                            .border(
-                                1.5.dp,
-                                if (selected) cat.border else CardBorder,
-                                CircleShape
-                            )
-                            .clickable { onMinsChange(d) }
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "$d",
-                                fontFamily = FontFamily.SansSerif,
-                                fontSize = 16.sp,
-                                color = if (selected) cat.color else TextTertiary
-                            )
-                            Text(
-                                text = "min",
-                                fontFamily = FontFamily.SansSerif,
-                                fontSize = 8.sp,
-                                color = if (selected) cat.color else TextMuted
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
             // Pattern info
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(CardBg, RoundedCornerShape(14.dp))
-                    .border(1.dp, CardBorder, RoundedCornerShape(14.dp))
-                    .padding(16.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "${pattern.label} Pattern".uppercase(),
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 10.sp,
-                        color = cat.color.copy(alpha = 0.7f),
-                        letterSpacing = 1.2.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("↑ In ${pattern.inhale}s", fontFamily = FontFamily.SansSerif, fontSize = 12.sp, color = InhaleColor)
-                        if (pattern.hold1 > 0) Text("· Hold ${pattern.hold1}s", fontFamily = FontFamily.SansSerif, fontSize = 12.sp, color = HoldColor)
-                        Text("↓ Out ${pattern.exhale}s", fontFamily = FontFamily.SansSerif, fontSize = 12.sp, color = ExhaleColor)
-                        if (pattern.hold2 > 0) Text("· Hold ${pattern.hold2}s", fontFamily = FontFamily.SansSerif, fontSize = 12.sp, color = HoldColor)
-                    }
-                }
-            }
-        } else {
-            Text(
-                text = "${exercise.mins} min · ${exercise.steps.size} steps",
-                fontFamily = FontFamily.SansSerif,
-                fontSize = 12.sp,
-                color = TextTertiary
-            )
         }
 
         Spacer(Modifier.height(32.dp))
@@ -370,7 +352,6 @@ private fun PreviewPhase(
 private fun ReadyPhase(
     exercise: Exercise,
     cat: Category,
-    customMins: Int,
     onClose: () -> Unit,
     onReview: () -> Unit,
     onBegin: () -> Unit
@@ -384,8 +365,8 @@ private fun ReadyPhase(
     ) {
         Text(
             text = "✕",
-            color = TextMuted,
-            fontSize = 22.sp,
+            color = TextTertiary,
+            fontSize = 26.sp,
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable { onClose() }
@@ -436,7 +417,7 @@ private fun ReadyPhase(
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "$customMins min",
+            text = "${exercise.mins} min",
             fontFamily = FontFamily.SansSerif,
             fontSize = 12.sp,
             color = TextMuted
@@ -478,6 +459,9 @@ private fun ActiveCompletePhase(
     seconds: Int,
     currentInstruction: String,
     step: Int,
+    cyclesLeft: Int,
+    isMuted: Boolean,
+    onToggleMute: () -> Unit,
     onClose: () -> Unit,
     onReset: () -> Unit,
     onJournal: (() -> Unit)?
@@ -491,12 +475,19 @@ private fun ActiveCompletePhase(
     ) {
         Text(
             text = "✕",
-            color = TextMuted,
-            fontSize = 22.sp,
+            color = TextTertiary,
+            fontSize = 26.sp,
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable { onClose() }
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            MuteToggle(isMuted = isMuted, onToggle = onToggleMute)
+        }
 
         Spacer(Modifier.weight(1f))
 
@@ -512,124 +503,139 @@ private fun ActiveCompletePhase(
         Text(
             text = exercise.name,
             fontFamily = FontFamily.Serif,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Light,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
             color = TextPrimary
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
 
-        // Breathing guide
-        if (isBreathing && pattern != null && phase == "active") {
-            BreathingGuide(pattern = pattern, elapsed = elapsed)
-        }
+        // Timer/Progress at Top
+        if (exercise.mins > 0) {
+            val trackColor = TextMuted.copy(alpha = 0.1f)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(100.dp)
+                    .drawBehind {
+                        val strokeWidth = 2.dp.toPx()
+                        val radius = (size.minDimension - strokeWidth) / 2
+                        val center = Offset(size.width / 2, size.height / 2)
 
-        // Circular progress timer
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(180.dp)
-                .drawBehind {
-                    val strokeWidth = 3.dp.toPx()
-                    val radius = (size.minDimension - strokeWidth) / 2
-                    val center = Offset(size.width / 2, size.height / 2)
+                        drawCircle(
+                            color = trackColor,
+                            radius = radius,
+                            center = center,
+                            style = Stroke(width = strokeWidth)
+                        )
 
-                    // Background circle
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.05f),
-                        radius = radius,
-                        center = center,
-                        style = Stroke(width = strokeWidth)
+                        drawArc(
+                            color = cat.color,
+                            startAngle = -90f,
+                            sweepAngle = 360f * progress,
+                            useCenter = false,
+                            topLeft = Offset(center.x - radius, center.y - radius),
+                            size = Size(radius * 2, radius * 2),
+                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                        )
+                    }
+            ) {
+                if (phase == "complete") {
+                    Text(
+                        text = "peace",
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 16.sp,
+                        color = cat.color
                     )
-
-                    // Progress arc
-                    drawArc(
-                        color = cat.color.copy(alpha = 0.7f),
-                        startAngle = -90f,
-                        sweepAngle = 360f * progress,
-                        useCenter = false,
-                        topLeft = Offset(center.x - radius, center.y - radius),
-                        size = Size(radius * 2, radius * 2),
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                    )
-                }
-        ) {
-            if (phase == "complete") {
-                Text(
-                    text = "namaste",
-                    fontFamily = FontFamily.Serif,
-                    fontSize = 22.sp,
-                    color = cat.color
-                )
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                } else {
                     Text(
                         text = "$minutes:${seconds.toString().padStart(2, '0')}",
                         fontFamily = FontFamily.SansSerif,
-                        fontSize = 40.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Light,
                         color = TextPrimary
                     )
-                    Text(
-                        text = "REMAINING",
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 9.sp,
-                        color = TextMuted,
-                        letterSpacing = 1.5.sp
-                    )
                 }
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(32.dp))
 
-        // Current instruction
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.height(70.dp).widthIn(max = 360.dp)
-        ) {
-            Text(
-                text = if (phase == "complete") "You did beautifully. Carry this stillness with you." else currentInstruction,
-                fontFamily = FontFamily.Serif,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Light,
-                fontStyle = FontStyle.Italic,
-                color = TextSecondary,
-                textAlign = TextAlign.Center,
-                lineHeight = 26.sp
-            )
+        val showAllInstructions = exercise.showAllSteps || !isBreathing
+
+        if (phase == "active" && !showAllInstructions) {
+            // Breathing guide for guided breathing
+            if (isBreathing && pattern != null) {
+                Spacer(Modifier.weight(0.5f))
+                BreathingGuide(pattern = pattern, elapsed = elapsed)
+                Spacer(Modifier.weight(0.5f))
+            }
         }
 
-        Spacer(Modifier.height(16.dp))
-
-        // Step dots (for non-breathing)
-        if (!isBreathing && phase == "active") {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                exercise.steps.forEachIndexed { i, _ ->
-                    Box(
+        if (showAllInstructions && phase == "active") {
+            // Show all instructions in a scrollable area
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp)
+            ) {
+                exercise.steps.forEachIndexed { i, stepText ->
+                    Row(
                         modifier = Modifier
-                            .size(6.dp)
-                            .background(
-                                if (i <= step) cat.color else Color.White.copy(alpha = 0.1f),
-                                CircleShape
-                            )
-                    )
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "${i + 1}",
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 18.sp,
+                            color = cat.color.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Light
+                        )
+                        Text(
+                            text = stepText,
+                            fontFamily = FontFamily.SansSerif,
+                            fontSize = 16.sp,
+                            color = TextSecondary,
+                            lineHeight = 24.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+        } else {
+            // Current instruction for guided mode
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.height(80.dp).widthIn(max = 360.dp)
+            ) {
+                Text(
+                    text = if (phase == "complete") "You did beautifully. Carry this stillness with you." else currentInstruction,
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Light,
+                    fontStyle = FontStyle.Italic,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 28.sp
+                )
+            }
+            Spacer(Modifier.weight(1f))
         }
 
-        // Cycle count for breathing
-        if (isBreathing && pattern != null && phase == "active") {
-            val cycle = (elapsed / (pattern.inhale + pattern.hold1 + pattern.exhale + pattern.hold2)) + 1
+        // Cycle count for breathing (cycle-limited)
+        if (isBreathing && pattern != null && exercise.cycles != null && phase == "active") {
+            Spacer(Modifier.height(12.dp))
+            val currentCycle = min(exercise.cycles - cyclesLeft + 1, exercise.cycles)
             Text(
-                text = "Cycle $cycle",
+                text = "Cycle $currentCycle / ${exercise.cycles}",
                 fontFamily = FontFamily.SansSerif,
-                fontSize = 10.sp,
-                color = TextMuted,
+                fontSize = 12.sp,
+                color = TextTertiary,
                 letterSpacing = 1.2.sp
             )
-            Spacer(Modifier.height(8.dp))
         }
 
         Spacer(Modifier.height(16.dp))

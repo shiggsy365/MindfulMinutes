@@ -21,18 +21,28 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.mindfulminutes.ui.theme.*
 
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import com.mindfulminutes.ui.theme.ALL_THEMES
+import com.mindfulminutes.ui.theme.AppTheme
+
 @Composable
 fun SettingsPanel(
     isOpen: Boolean,
     onDismiss: () -> Unit,
     apiKey: String,
     onSaveKey: (String) -> Unit,
+    ttsUrl: String,
+    onSaveTtsUrl: (String) -> Unit,
     notifications: Map<String, Boolean>,
-    onToggleNotification: (String) -> Unit
+    onToggleNotification: (String) -> Unit,
+    selectedTheme: AppTheme,
+    onThemeChange: (AppTheme) -> Unit
 ) {
     if (!isOpen) return
 
     var tempKey by remember(apiKey) { mutableStateOf(apiKey) }
+    var tempTtsUrl by remember(ttsUrl) { mutableStateOf(ttsUrl) }
 
     Dialog(onDismissRequest = onDismiss) {
         Box(
@@ -53,41 +63,69 @@ fun SettingsPanel(
 
                 Spacer(Modifier.height(24.dp))
 
-                // Unsplash Key
+                // UNSPLASH KEY
+                SettingsSection(
+                    label = "UNSPLASH KEY",
+                    value = tempKey,
+                    onValueChange = { tempKey = it },
+                    placeholder = "Access Key"
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // TTS SERVER
+                SettingsSection(
+                    label = "CUSTOM TTS SERVER",
+                    value = tempTtsUrl,
+                    onValueChange = { tempTtsUrl = it },
+                    placeholder = "https://your-server.com"
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                // THEME SELECTOR
                 Text(
-                    text = "UNSPLASH KEY",
+                    text = "APP THEME",
                     fontFamily = FontFamily.SansSerif,
                     fontSize = 10.sp,
                     color = TextTertiary,
                     letterSpacing = 1.5.sp
                 )
-                Spacer(Modifier.height(8.dp))
-                TextField(
-                    value = tempKey,
-                    onValueChange = { tempKey = it },
-                    placeholder = {
-                        Text("Access Key", fontFamily = FontFamily.SansSerif, fontSize = 13.sp, color = TextMuted)
-                    },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = CardBg,
-                        unfocusedContainerColor = CardBg,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = Accent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, CardBorder, RoundedCornerShape(10.dp)),
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 13.sp
-                    )
-                )
                 Spacer(Modifier.height(12.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(ALL_THEMES) { theme ->
+                        val isSelected = theme.id == selectedTheme.id
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable { onThemeChange(theme) }
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(theme.background, RoundedCornerShape(12.dp))
+                                    .border(
+                                        2.dp,
+                                        if (isSelected) theme.accent else theme.cardBorder,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                            ) {
+                                Text(text = theme.icon, fontSize = 20.sp)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = theme.name,
+                                fontFamily = FontFamily.SansSerif,
+                                fontSize = 9.sp,
+                                color = if (isSelected) selectedTheme.accent else TextMuted,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -96,12 +134,13 @@ fun SettingsPanel(
                         .border(1.dp, AccentBorder, RoundedCornerShape(10.dp))
                         .clickable {
                             onSaveKey(tempKey)
+                            onSaveTtsUrl(tempTtsUrl)
                             onDismiss()
                         }
                         .padding(vertical = 12.dp)
                 ) {
                     Text(
-                        text = "Save Key",
+                        text = "Save Settings",
                         fontFamily = FontFamily.SansSerif,
                         fontSize = 12.sp,
                         color = Accent,
@@ -171,4 +210,46 @@ fun SettingsPanel(
             }
         }
     }
+}
+
+@Composable
+fun SettingsSection(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String
+) {
+    Text(
+        text = label,
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 10.sp,
+        color = TextTertiary,
+        letterSpacing = 1.5.sp
+    )
+    Spacer(Modifier.height(8.dp))
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = {
+            Text(placeholder, fontFamily = FontFamily.SansSerif, fontSize = 13.sp, color = TextMuted)
+        },
+        singleLine = true,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = CardBg,
+            unfocusedContainerColor = CardBg,
+            focusedTextColor = TextPrimary,
+            unfocusedTextColor = TextPrimary,
+            cursorColor = Accent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent
+        ),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, CardBorder, RoundedCornerShape(10.dp)),
+        textStyle = androidx.compose.ui.text.TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 13.sp
+        )
+    )
 }

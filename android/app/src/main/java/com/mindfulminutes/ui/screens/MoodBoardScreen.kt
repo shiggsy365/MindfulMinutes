@@ -33,7 +33,9 @@ import java.util.Date
 
 @Composable
 fun MoodBoardScreen(
-    navigateTo: (String) -> Unit
+    navigateTo: (String) -> Unit,
+    isMuted: Boolean,
+    onToggleMute: () -> Unit
 ) {
     var tab by remember { mutableStateOf("sessions") }
     var selectedMoodId by remember { mutableStateOf<String?>(null) }
@@ -78,6 +80,8 @@ fun MoodBoardScreen(
         MoodTimer(
             session = activeSession!!,
             mood = mood,
+            isMuted = isMuted,
+            onToggleMute = onToggleMute,
             onClose = { activeSession = null }
         )
         return

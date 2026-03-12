@@ -24,6 +24,9 @@ import com.mindfulminutes.data.*
 import com.mindfulminutes.ui.components.ExerciseTimer
 import com.mindfulminutes.ui.components.JournalOverlay
 import com.mindfulminutes.ui.theme.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 
 @Composable
 fun MinutesScreen(
@@ -32,7 +35,9 @@ fun MinutesScreen(
     stats: List<StatEntry>,
     addStats: (Exercise) -> Unit,
     journal: List<JournalEntry>,
-    addJournal: (String, String?) -> Unit
+    addJournal: (String, String?) -> Unit,
+    isMuted: Boolean,
+    onToggleMute: () -> Unit
 ) {
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var activeExercise by remember { mutableStateOf<Exercise?>(null) }
@@ -57,7 +62,9 @@ fun MinutesScreen(
             isFav = activeExercise!!.id in favourites,
             onFav = { toggleFav(activeExercise!!.id) },
             onComplete = { addStats(activeExercise!!) },
-            onJournal = { showJournal = true }
+            onJournal = { showJournal = true },
+            isMuted = isMuted,
+            onToggleMute = onToggleMute
         )
     }
 
@@ -77,7 +84,7 @@ fun MinutesScreen(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color(0xFF0E100F), Background)
+                        colors = listOf(Surface, Background, Background)
                     )
                 )
                 .padding(horizontal = 16.dp)
@@ -130,72 +137,49 @@ fun MinutesScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            // Category filters - using a simple Row with wrapping
-            Column(
-                modifier = Modifier.fillMaxWidth()
+            // Category & Favorites Filter
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // First row: All + Favourites
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+                // Favourites toggle
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (showFavs) FavColor.copy(alpha = 0.15f) else CardBg,
+                            RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            1.dp,
+                            if (showFavs) FavColor.copy(alpha = 0.4f) else CardBorder,
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable { 
+                            showFavs = !showFavs
+                            if (showFavs) selectedCat = null
+                        }
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    FilterChip(
-                        text = "All",
-                        selected = selectedCat == null && !showFavs,
-                        onClick = { selectedCat = null; showFavs = false }
+                    Text(
+                        text = if (showFavs) "♥ FAVS" else "♡ FAVS",
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 11.sp,
+                        color = if (showFavs) FavColor else TextSecondary,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 1.sp
                     )
-                    Spacer(Modifier.width(6.dp))
-                    if (favourites.isNotEmpty()) {
-                        FilterChip(
-                            text = "♥ Favourites",
-                            selected = showFavs,
-                            selectedColor = FavColor,
-                            onClick = { showFavs = !showFavs; selectedCat = null }
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
                 }
-                Spacer(Modifier.height(6.dp))
-                // Second row: Categories
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    CATEGORIES.take(3).forEach { cat ->
-                        FilterChip(
-                            text = "${cat.icon} ${cat.name}",
-                            selected = selectedCat == cat.id,
-                            selectedColor = cat.color,
-                            selectedBg = cat.bg,
-                            selectedBorder = cat.border,
-                            onClick = {
-                                selectedCat = if (selectedCat == cat.id) null else cat.id
-                                showFavs = false
-                            }
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    CATEGORIES.drop(3).forEach { cat ->
-                        FilterChip(
-                            text = "${cat.icon} ${cat.name}",
-                            selected = selectedCat == cat.id,
-                            selectedColor = cat.color,
-                            selectedBg = cat.bg,
-                            selectedBorder = cat.border,
-                            onClick = {
-                                selectedCat = if (selectedCat == cat.id) null else cat.id
-                                showFavs = false
-                            }
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
-                }
+
+                // Dropdown Filter
+                CategoryDropdown(
+                    selectedCat = selectedCat,
+                    onSelect = { 
+                        selectedCat = it
+                        showFavs = false
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             // Category description
@@ -233,9 +217,9 @@ fun MinutesScreen(
 
             if (selectedCat == null && !showFavs) {
                 Text(
-                    text = "Choose a category to explore all 60 exercises",
+                    text = "Select a category to filter the 60 exercises",
                     fontFamily = FontFamily.SansSerif,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = TextMuted,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
@@ -244,6 +228,101 @@ fun MinutesScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CategoryDropdown(
+    selectedCat: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedItem = CATEGORIES.find { it.id == selectedCat }
+
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardBg, RoundedCornerShape(12.dp))
+                .border(1.dp, if (expanded) Accent.copy(alpha = 0.5f) else CardBorder, RoundedCornerShape(12.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = selectedItem?.let { "${it.icon} ${it.name}" } ?: "All Categories",
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 13.sp,
+                    color = selectedItem?.color ?: TextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = if (expanded) "▴" else "▾",
+                    color = TextMuted,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .fillMaxWidth()
+                    .background(Surface, RoundedCornerShape(12.dp))
+                    .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
+                    .padding(4.dp)
+            ) {
+                DropdownItem(
+                    text = "All Categories",
+                    selected = selectedCat == null,
+                    onClick = { onSelect(null); expanded = false }
+                )
+                CATEGORIES.forEach { cat ->
+                    DropdownItem(
+                        text = "${cat.icon} ${cat.name}",
+                        selected = selectedCat == cat.id,
+                        color = cat.color,
+                        onClick = { onSelect(cat.id); expanded = false }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DropdownItem(
+    text: String,
+    selected: Boolean,
+    color: Color = TextPrimary,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) color.copy(alpha = 0.1f) else Color.Transparent,
+                RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = text,
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 13.sp,
+            color = if (selected) color else TextSecondary
+        )
     }
 }
 

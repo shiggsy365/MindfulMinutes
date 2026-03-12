@@ -1,31 +1,64 @@
 package com.mindfulminutes.ui.theme
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 
-// Core palette
-val Background = Color(0xFF0A0F0C)
-val Surface = Color(0xFF0E100F)
-val SurfaceLight = Color(0xFF121816)
-val Accent = Color(0xFFA7C7A8)
-val AccentDim = Color(0x33A7C7A8)
-val AccentBorder = Color(0x26A7C7A8)
-val AccentBg = Color(0x14A7C7A8)
+// ── Static convenience accessors ──────────────────────────────────────────────
+// These read the current theme from the composition local.
+// They can be used in any @Composable context.
 
-val TextPrimary = Color(0xE0FFFFFF)
-val TextSecondary = Color(0x99FFFFFF)
-val TextTertiary = Color(0x4DFFFFFF)
-val TextMuted = Color(0x33FFFFFF)
+val Background: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.background
 
-val CardBg = Color(0x07FFFFFF)
-val CardBorder = Color(0x0FFFFFFF)
-val CardBgHover = Color(0x14FFFFFF)
+val Surface: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.surface
 
-val DividerColor = Color(0x0FFFFFFF)
+val SurfaceLight: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.surfaceLight
 
-// Breathing phase colors
-val InhaleColor = Color(0xCC96C8AA)
-val ExhaleColor = Color(0xCC96AAC8)
-val HoldColor = Color(0xCCC8BE96)
+val Accent: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.accent
 
-// Favourite heart
-val FavColor = Color(0xE6D2AAB4)
+val AccentDim: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.accentDim
+
+val AccentBorder: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.accentBorder
+
+val AccentBg: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.accentBg
+
+val TextPrimary: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.textPrimary
+
+val TextSecondary: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.textSecondary
+
+val TextTertiary: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.textTertiary
+
+val TextMuted: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.textMuted
+
+val CardBg: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.cardBg
+
+val CardBorder: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.cardBorder
+
+val CardBgHover: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.cardBgHover
+
+val InhaleColor: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.inhaleColor
+
+val ExhaleColor: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.exhaleColor
+
+val HoldColor: Color
+    @Composable @ReadOnlyComposable get() = LocalAppTheme.current.holdColor
+
+// ── Static non-themed colors ──────────────────────────────────────────────────
+val DividerColor = Color(0x14FFFFFF)
+val FavColor = Color(0xFFD48D8D)

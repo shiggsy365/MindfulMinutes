@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="MindfulMinutes — 60 mindfulness exercises, mood tracking, guided escapes, soundscapes, and journaling in one beautiful app." />
+  <meta name="theme-color" content="#0a0f0c" />
+  <title>MindfulMinutes · Calm in Every Minute</title>
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧘</text></svg>" />
+
+  <!-- React + ReactDOM (production) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel standalone for JSX transpilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #root { height: 100%; background: #0a0f0c; }
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #0a0f0c;
+      color: rgba(255,255,255,0.4);
+      font-family: 'Karla', sans-serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      gap: 1.5rem;
+    }
+    .load-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(167,199,168,0.25);
+      animation: breathe 2s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%,100% { transform: scale(1); opacity: 0.35; }
+      50%  { transform: scale(1.4); opacity: 0.75; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="load-circle"></div>
+    <span>Mindful Minutes</span>
+  </div>
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module" src="./mindful-minutes.jsx" data-presets="react"></script>
+
+  <script>
+    // Render after Babel finishes transpiling the JSX
+    document.addEventListener('DOMContentLoaded', () => {
+      // Babel standalone fires a custom event when done; poll as fallback
+      const tryMount = () => {
+        if (window.MindfulMinutes || (window.__babelTransformed && window.MindfulMinutes)) {
+          mount();
+        }
+      };
+
+      function mount() {
+        const loading = document.getElementById('loading');
+        const root = document.getElementById('root');
+        if (loading) loading.style.display = 'none';
+        ReactDOM.createRoot(root).render(
+          React.createElement(window.MindfulMinutes || window.default)
+        );
+      }
+
+      // Babel standalone with data-type="module" exports to window automatically
+      // Give it a moment to compile
+      setTimeout(() => {
+        if (document.getElementById('loading').style.display !== 'none') {
+          mount();
+        }
+      }, 500);
+    });
+  </script>
+</body>
+</html>

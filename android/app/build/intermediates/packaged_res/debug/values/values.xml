@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#FFA7C7A8</color>
+    <color name="background">#FF0A0F0C</color>
+    <color name="surface">#FF0E100F</color>
+    <string name="app_name">Mindful Minutes</string>
+    <string name="widget_description">Displays today’s Zen quote and your daily intention</string>
+    <style name="Theme.MindfulMinutes" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FF0A0F0C</item>
+        <item name="android:statusBarColor">#FF0A0F0C</item>
+        <item name="android:navigationBarColor">#FF0A0F0C</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

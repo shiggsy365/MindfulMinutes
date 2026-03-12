@@ -13,23 +13,55 @@ import com.mindfulminutes.data.*
 import com.mindfulminutes.ui.components.NavBar
 import com.mindfulminutes.ui.components.SettingsPanel
 import com.mindfulminutes.ui.screens.*
+import com.mindfulminutes.ui.theme.AppTheme
 import com.mindfulminutes.ui.theme.Background
 import com.mindfulminutes.ui.theme.MindfulMinutesTheme
+import com.mindfulminutes.ui.theme.ThemeForest
+import androidx.compose.ui.unit.dp
+import com.mindfulminutes.audio.SpeechManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+
+val LocalSpeechManager = staticCompositionLocalOf<SpeechManager?> { null }
 
 class MainActivity : ComponentActivity() {
+    private var speechManager: SpeechManager? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        speechManager = SpeechManager(this)
         enableEdgeToEdge()
         setContent {
-            MindfulMinutesTheme {
+            CompositionLocalProvider(LocalSpeechManager provides speechManager) {
                 MindfulMinutesApp()
             }
         }
+    }
+
+    override fun onDestroy() {
+        speechManager?.shutdown()
+        super.onDestroy()
     }
 }
 
 @Composable
 fun MindfulMinutesApp() {
+    var selectedTheme by remember { mutableStateOf<AppTheme>(ThemeForest) }
+
+    MindfulMinutesTheme(appTheme = selectedTheme) {
+        MindfulMinutesContent(
+            selectedTheme = selectedTheme,
+            onThemeChange = { selectedTheme = it }
+        )
+    }
+}
+
+@Composable
+fun MindfulMinutesContent(
+    selectedTheme: AppTheme,
+    onThemeChange: (AppTheme) -> Unit
+) {
     var page by remember { mutableStateOf("zen") }
     var unsplashKey by remember { mutableStateOf("") }
     var settingsOpen by remember { mutableStateOf(false) }
@@ -38,6 +70,16 @@ fun MindfulMinutesApp() {
     var stats by remember { mutableStateOf(listOf<StatEntry>()) }
     var journal by remember { mutableStateOf(listOf<JournalEntry>()) }
     var notifications by remember { mutableStateOf(mapOf("morning" to false, "afternoon" to false, "evening" to false)) }
+    var ttsUrl by remember { mutableStateOf("") }
+    var isMuted by remember { mutableStateOf(false) }
+    
+    val speechManager = LocalSpeechManager.current
+    
+    // Sync TTS URL and Mute state to SpeechManager
+    LaunchedEffect(ttsUrl, isMuted) {
+        speechManager?.serverUrl = ttsUrl
+        speechManager?.isMuted = isMuted
+    }
 
     val toggleFav: (String) -> Unit = { id ->
         favourites = if (id in favourites) favourites - id else favourites + id
@@ -67,12 +109,16 @@ fun MindfulMinutesApp() {
         onDismiss = { settingsOpen = false },
         apiKey = unsplashKey,
         onSaveKey = { unsplashKey = it },
+        ttsUrl = ttsUrl,
+        onSaveTtsUrl = { ttsUrl = it },
         notifications = notifications,
         onToggleNotification = { key ->
             notifications = notifications.toMutableMap().apply {
                 this[key] = !(this[key] ?: false)
             }
-        }
+        },
+        selectedTheme = selectedTheme,
+        onThemeChange = onThemeChange
     )
 
     Box(
@@ -105,10 +151,14 @@ fun MindfulMinutesApp() {
                         stats = stats,
                         addStats = addStats,
                         journal = journal,
-                        addJournal = addJournal
+                        addJournal = addJournal,
+                        isMuted = isMuted,
+                        onToggleMute = { isMuted = !isMuted }
                     )
                     "mood" -> MoodBoardScreen(
-                        navigateTo = { page = it }
+                        navigateTo = { page = it },
+                        isMuted = isMuted,
+                        onToggleMute = { isMuted = !isMuted }
                     )
                     "escapes" -> GuidedEscapesScreen()
                     "practice" -> StatsScreen(
